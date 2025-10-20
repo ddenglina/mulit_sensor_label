@@ -253,6 +253,7 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
                 # color = np.random.rand(3)
                 color = hex_to_rgb(cube["color"])
                 bbox.color = [c/255 for c in color]
+                # bbox.size = 2
                 
                 axis_length = max(cube["dimensions"]) * 0.8
                 axes = create_bbox_axes(bbox, axis_length,bbox.color)

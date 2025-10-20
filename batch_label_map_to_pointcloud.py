@@ -5,6 +5,7 @@ from scipy.spatial.transform import Rotation as R
 import json
 import math
 
+
 # 辅助函数：将3D点通过变换矩阵进行变换
 def transform_point(point, matrix):
     """
@@ -173,7 +174,7 @@ def create_bbox_axes(bbox, axis_length=1.0,color=[1, 0, 0]):
     
     return lines
 
-def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=None):
+def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=None, min_points=32):
 
     # 解析标签并对标签进行变换
     cubes = parse_3d_annotations(json_annotation_path)
@@ -243,7 +244,7 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
                 num_in_box = np.sum(in_bbox)
                 
                 # 如果点数 >= min_points，则保留该框
-                min_points = 32
+                # min_points = 32
                 # print(num_in_box)
                 if num_in_box < min_points:
                     continue
@@ -270,7 +271,7 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
                 ex, ey, ez = bbox.extent
                 # 旋转矩阵（3x3）展平为列表
                 # r_flat = [elem for row in bbox.R for elem in row]
-                rx,ry,rz = rot2euler(bbox.R)
+                rx,ry,rz = rot2euler(bbox.R)     
                 
                 # 拼接成行数据（使用逗号分隔，便于后续后读取）
                 line = f"{label_name},{cx:.6f},{cy:.6f},{cz:.6f},{ex:.6f},{ey:.6f},{ez:.6f},{rx:.6f},{ry:.6f},{rz:.6f}\n"
@@ -291,6 +292,9 @@ if __name__=="__main__":
     ai_label_dir = "/mnt/dln/data/datasets/0915/make_label_raw/label/"
     raw_data_dir = "/mnt/dln/data/datasets/0915/make_label_raw/"
     json_annotation_list = os.listdir(ai_label_dir)
+
+
+
     for json_annotation in json_annotation_list:
         json_annotation_path = os.path.join(ai_label_dir,json_annotation)
         scene_name = json_annotation[:-11]
@@ -310,11 +314,8 @@ if __name__=="__main__":
         #     [ 0.        ,  0.        ,  0.        ,  1.        ]]
         # ) 
 
-        # align_transform = np.array(
-        #                 [[ 0.66434835, -0.74325666, -0.07880863,  0.83646784],
-        #                 [ 0.74309994,  0.66814807, -0.0371569,  -0.28735589],
-        #                 [ 0.08027295, -0.03387756,  0.99619705, -0.02949269],
-        #                 [ 0.,          0.,          0.,          1.        ]])
-    
-        main(json_annotation_path,pcd_dir,pose_dir,save_label_dir)
+        # 3D框：默认设置min_points=35
+        # for 2D框: 默认设置min_points=60
+        
+        main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,min_points=35)
     

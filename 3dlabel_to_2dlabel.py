@@ -8,6 +8,7 @@ from matplotlib.patches import Rectangle
 import cv2
 import pandas as pd
 import math
+import open3d as o3d
 
 
 # --------------------------
@@ -24,9 +25,46 @@ class_color_map = {
     # 可根据实际类别扩展...
 }
 
+# 类别ID -> BGR颜色（确保颜色区分明显，OpenCV用BGR格式）
+min_points_list = {
+    "car": 130,    # 类别0：红色（如car）
+    "chair": 35,    # 类别1：绿色（如pedestrian）
+    "table": 35,    # 类别2：蓝色（如cyclist）
+    "robot": 35,  # 类别3：黄色（如truck）
+    "trash_can": 35, # 类别4：紫色（如bus）
+    "screen": 35 # 类别5：黄色（如screen）
+    # 可根据实际类别扩展...
+}
+
+
+
+def get_common_view_points(points, K, R_lidar2cam, T_lidar2cam, img_width, img_height):
+    """提取共视区点云及投影坐标"""
+    # 雷达点→相机坐标系
+    points_hom = np.hstack([points, np.ones((points.shape[0], 1))])  # (N,4)
+    extrinsic = np.hstack([R_lidar2cam, T_lidar2cam.reshape(3,1)])    # (3,4)
+    points_cam = (extrinsic @ points_hom.T).T                         # (N,3)：(X,Y,Z)
+    
+    # 筛选相机前方的点（Z>0）
+    front_mask = points_cam[:, 2] > 1e-6
+    points_cam_valid = points_cam[front_mask]
+    points_valid = points[front_mask]
+    
+    # 投影到图像平面
+    Z = points_cam_valid[:, 2].reshape(-1, 1)
+    X = points_cam_valid[:, 0].reshape(-1, 1)
+    Y = points_cam_valid[:, 1].reshape(-1, 1)
+    u = (K[0,0] * X / Z + K[0,2]).flatten()  # 像素u
+    v = (K[1,1] * Y / Z + K[1,2]).flatten()  # 像素v
+    
+    # 筛选图像范围内的点
+    img_mask = (u >= 0) & (u < img_width) & (v >= 0) & (v < img_height)
+    common_points = points_valid[img_mask]
+    uvs = np.column_stack([u[img_mask], v[img_mask]]).astype(int)
+    return common_points, uvs
+
 
 # 1. 解析3D点云标注的JSON文件
-
 def parse_3d_annotations(txt_path):
     """解析3D标签TXT文件，返回与JSON解析函数结构一致的列表"""
     # 读取TXT文件（使用pandas处理表头和数据）
@@ -63,21 +101,13 @@ def get_camera_intrinsics():
     # width = 1280 # 图像宽度
     # height = 720 # 图像高度
 
-    """
     # geoscan d435i
-    fx = 605.231000
-    fy = 605.133900  # 焦距y
-    cx = 320.931700   # 主点x坐标
-    cy = 253.091400   # 主点y坐标
+    cam_fx = 605.231000
+    cam_fy = 605.133900  # 焦距y
+    cam_cx = 320.931700   # 主点x坐标
+    cam_cy = 253.091400   # 主点y坐标
     width = 640 # 图像宽度
     height = 480 # 图像高度
-
-    # 内参矩阵
-    K = np.array([
-        [fx, 0, cx],
-        [0, fy, cy],
-        [0, 0, 1]
-    ])
 
     camera_to_lidar = np.array([
         [-0.028191, -0.9996, 0.000532, 0.033057],
@@ -85,7 +115,6 @@ def get_camera_intrinsics():
         [0.902087, -0.025211, 0.430817, 0.013525],
         [0, 0, 0, 1]
         ], dtype=np.float64)
-    """
 
     # 环视d435i
     # fx = 605.231000
@@ -95,8 +124,8 @@ def get_camera_intrinsics():
     # width = 640 # 图像宽度
     # height = 480 # 图像高度
 
-    width = 512
-    height = 384
+    # width = 512
+    # height = 384
     #0
     # fx = 491.61243079/2
     # fy = 491.59793421/2
@@ -133,16 +162,17 @@ def get_camera_intrinsics():
     #     [  -0.719232,  -0.694343,   0.024365,-0.030108],
     #     [ 0, 0, 0, 1]], dtype=np.float64) 
 
-    cam_fx = 492.21619642/2
-    cam_fy = 491.75080876/2
-    cam_cx = 531.39937227/2
-    cam_cy = 394.35920146/2
+    # 3
+    # cam_fx = 492.21619642/2
+    # cam_fy = 491.75080876/2
+    # cam_cx = 531.39937227/2
+    # cam_cy = 394.35920146/2
     
-    camera_to_lidar = np.array([
-        [  0.726027,   0.687592,  -0.010122, 0.079652],
-        [ 0.001577,  -0.016384,  -0.999865, 0.014322],
-        [-0.687665,   0.725912,  -0.012979,-0.068272],
-        [ 0, 0, 0, 1]], dtype=np.float64) 
+    # camera_to_lidar = np.array([
+    #     [  0.726027,   0.687592,  -0.010122, 0.079652],
+    #     [ 0.001577,  -0.016384,  -0.999865, 0.014322],
+    #     [-0.687665,   0.725912,  -0.012979,-0.068272],
+    #     [ 0, 0, 0, 1]], dtype=np.float64) 
     
     # 内参矩阵
     K = np.array([
@@ -249,29 +279,67 @@ def project_3d_to_2d(points_3d, K, R, t):
     
     return points_2d
 
+
+def euler2rot(euler, order='xyz'):
+    """
+    欧拉角转旋转矩阵
+    :param euler: 欧拉角 (α, β, γ)，单位：弧度
+    :param order: 旋转顺序（如 'xyz', 'zyx', 'xzy' 等）
+    :return: 3x3 旋转矩阵
+    """
+    alpha, beta, gamma = euler
+    # 定义单个轴的旋转矩阵
+    def Rx(θ):
+        return np.array([[1, 0, 0],
+                         [0, np.cos(θ), -np.sin(θ)],
+                         [0, np.sin(θ), np.cos(θ)]])
+    def Ry(θ):
+        return np.array([[np.cos(θ), 0, np.sin(θ)],
+                         [0, 1, 0],
+                         [-np.sin(θ), 0, np.cos(θ)]])
+    def Rz(θ):
+        return np.array([[np.cos(θ), -np.sin(θ), 0],
+                         [np.sin(θ), np.cos(θ), 0],
+                         [0, 0, 1]])
+    
+    # 根据旋转顺序计算总旋转矩阵（矩阵乘法顺序与旋转顺序一致）
+    rot_map = {'x': Rx, 'y': Ry, 'z': Rz}
+    R = np.eye(3)  # 初始化为单位矩阵
+    for axis, angle in zip(order, [alpha, beta, gamma]):
+        R = rot_map[axis](angle) @ R  # 矩阵乘法（@ 等价于 np.matmul）
+    return R
+
+def create_bounding_box(center, dimensions, rotation):
+    """
+    创建3D边界框
+    
+    参数:
+        center: 边界框中心点坐标 [x, y, z]
+        dimensions: 边界框尺寸 [长度, 宽度, 高度]
+        rotation: 边界框旋转角度 [x, y, z] (弧度)
+    
+    返回:
+        open3d.geometry.OrientedBoundingBox对象
+    """
+    # 创建轴对齐边界框
+    bbox = o3d.geometry.OrientedBoundingBox(
+        center=np.array(center),
+        extent=np.array(dimensions),
+        R=euler2rot(rotation),
+
+    )
+    
+    return bbox
+
+
+
 # 5. 可视化函数
-def visualize_projection_on_image(cubes, K, cam2lid,image_path, save_2dlabel_path, is_rotated_180=True):
+def visualize_projection_on_image(frame_pcd, cubes, K, cam2lid,image_path, save_2dlabel_path,vis_save_path,
+                                  is_rotated_180=True, min_area_ratio=0.3, min_valid_abs_area=10):
     """在实际图像上可视化3D立方体的投影"""
-    # if image_id not in cameras:
-    #     print(f"找不到ID为{image_id}的相机参数")
-    #     return None
-    
-    # camera = cameras[image_id]
-    # image_name = camera['image_name']
-    # image_path = os.path.join(image_folder, image_name)
-    
-    # 检查图像文件是否存在
-    # if not os.path.exists(image_path):
-    #     print(f"警告：图像文件 {image_path} 不存在，将使用空白背景")
-    #     # 使用相机内参中的尺寸创建空白图像
-    #     _, width, height = get_camera_intrinsics()
-    #     img = np.ones((height, width, 3), dtype=np.uint8) * 255  # 白色背景
-    # else:
     # 加载图像
-    img = np.array(Image.open(image_path))
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # 转换为BGR格式以便OpenCV使用
+    img = cv2.imread(image_path)
     height, width = img.shape[:2]
-    
     # print(f"处理图像: {image_name} (尺寸: {width}x{height})")
     
     # 获取相机外参
@@ -287,141 +355,127 @@ def visualize_projection_on_image(cubes, K, cam2lid,image_path, save_2dlabel_pat
     
     # 存储当前图像的所有YOLO标签
     yolo_labels = []
-
+    vis_objects = []
     # 处理每个立方体
     for cube in cubes:
-        # print(cube)
         # 计算立方体顶点
         vertices = get_cube_vertices(
             cube['center'], 
             cube['dimensions'], 
             cube['rotation']
         )
-        
+
         # 投影到2D图像
         vertices_2d = project_3d_to_2d(vertices, K, R, t)
-        
         # 过滤掉在相机后方的点 (z < 0)
         points_cam = R @ vertices.T + np.array(t).reshape(3, 1)
         visible = points_cam[2, :] > 0
-
         if not np.any(visible):
+            print("continue")
             continue  # 完全不可见的立方体不处理
+        
+        # ## 增加框中是否有点云判断 #########################################################
+        # 1.提取共视区点云
+        filter_frame_pcd, _ = get_common_view_points(np.asarray(frame_pcd.points), K, R, t, width, height)
+        # 2.判断共视区点云中是否有足够的点
+        bbox = create_bounding_box(cube['center'], cube['dimensions'], cube['rotation'])        
+        points_translated = np.asarray(filter_frame_pcd) - bbox.center
+        points_local = np.dot(points_translated, bbox.R)  # 转换到局部坐标系
+        half_extent = bbox.extent / 2
+        in_bbox = np.all(np.abs(points_local) <= half_extent + 1e-6, axis=1)
+        num_in_box = np.sum(in_bbox)
+        
+        # 如果点数 >= min_points，则保留该框
+        if num_in_box < min_points_list[cube['label']]:
+            continue  # 点数不足，跳过该框
+        # ###########################################################
 
+
+        vis_objects.append(bbox)  
         # 获取可见的2D顶点
         visible_vertices_2d = vertices_2d[visible]
         bbox = compute_bounding_box(visible_vertices_2d)
 
-
-        ## 绘制标签方式改这里,立方体为True  | 矩形框为False
-        if False:
-            # 绘制立方体投影边
-            for edge in edges:
-                v1, v2 = edge
-                if visible[v1] and visible[v2]:
-                    # 确保点在图像范围内
-                    if (0 <= vertices_2d[v1, 0] <= width and 0 <= vertices_2d[v1, 1] <= height and
-                        0 <= vertices_2d[v2, 0] <= width and 0 <= vertices_2d[v2, 1] <= height):
-                        ax.plot(
-                            [vertices_2d[v1, 0], vertices_2d[v2, 0]],
-                            [vertices_2d[v1, 1], vertices_2d[v2, 1]],
-                            color=cube['color'],
-                            linewidth=2,
-                            alpha=0.8
-                        )
+        # --------------------------
+        # 标签处理
+        min_x_original = bbox['min_x']
+        min_y_original = bbox['min_y']
+        clamped_width = bbox['width']  # 原始宽（未旋转图像中）
+        clamped_height = bbox['height']  # 原始高（未旋转图像中）
+        max_x_original = min_x_original + clamped_width
+        max_y_original = min_y_original + clamped_height
         
+        # 2. 计算原始框面积，防护面积为0的异常情况
+        original_area = clamped_width * clamped_height
+        # 2. 转换坐标到180度旋转后的图像
+        if is_rotated_180:
+            # 旋转后坐标（x和y轴均反转）
+            min_x_rot = width - 1 - min_x_original
+            max_x_rot = width - 1 - max_x_original
+            min_y_rot = height - 1 - min_y_original
+            max_y_rot = height - 1 - max_y_original
+            
+            # 旋转后min和max可能互换，需重新排序
+            min_x_rot, max_x_rot = sorted([min_x_rot, max_x_rot])
+            min_y_rot, max_y_rot = sorted([min_y_rot, max_y_rot])
         else:
+            min_x_rot, max_x_rot = min_x_original, max_x_original
+            min_y_rot, max_y_rot = min_y_original, max_y_original
+        
+        # --------------------------
+        # 3. 核心：裁剪超出图像边界的坐标（新增步骤）
+        # --------------------------
+        # 裁剪x坐标到[0, width-1]
+        min_x_clamped = np.clip(min_x_rot, 0, width - 1)
+        max_x_clamped = np.clip(max_x_rot, 0, width - 1)
+        min_x, max_x = (min_x_clamped, max_x_clamped) if min_x_clamped <= max_x_clamped else (max_x_clamped, min_x_clamped)
+        # 裁剪y坐标到[0, height-1]
+        min_y_clamped = np.clip(min_y_rot, 0, height - 1)
+        max_y_clamped = np.clip(max_y_rot, 0, height - 1)
+        min_y, max_y = (min_y_clamped, max_y_clamped) if min_y_clamped <= max_y_clamped else (max_y_clamped, min_y_clamped)
+        
+        # 计算裁剪后的有效宽高，过滤无效框
+        # 5. 计算有效框面积及占比，过滤小占比框（核心优化）
+        valid_width = max_x_clamped - min_x_clamped
+        valid_height = max_y_clamped - min_y_clamped
+        valid_area = valid_width * valid_height
 
-            min_x_original = bbox['min_x']
-            min_y_original = bbox['min_y']
-            clamped_width = bbox['width']  # 原始宽（未旋转图像中）
-            clamped_height = bbox['height']  # 原始高（未旋转图像中）
-            max_x_original = min_x_original + clamped_width
-            max_y_original = min_y_original + clamped_height
-            
-            # 2. 计算原始框面积，防护面积为0的异常情况
-            original_area = clamped_width * clamped_height
-            if original_area <= 0:
-                continue  # 原始框无效，跳过
+        if original_area <= 0:
+            # 原始框面积为0（无效），直接丢弃
+            continue
 
-            # 2. 转换坐标到180度旋转后的图像
-            if is_rotated_180:
-                # 旋转后坐标（x和y轴均反转）
-                min_x_rot = width - 1 - min_x_original
-                max_x_rot = width - 1 - max_x_original
-                min_y_rot = height - 1 - min_y_original
-                max_y_rot = height - 1 - max_y_original
-                
-                # 旋转后min和max可能互换，需重新排序
-                min_x_rot, max_x_rot = sorted([min_x_rot, max_x_rot])
-                min_y_rot, max_y_rot = sorted([min_y_rot, max_y_rot])
-            else:
-                min_x_rot, max_x_rot = min_x_original, max_x_original
-                min_y_rot, max_y_rot = min_y_original, max_y_original
-            
-            # --------------------------
-            # 3. 核心：裁剪超出图像边界的坐标（新增步骤）
-            # --------------------------
-            # 裁剪x坐标到[0, width-1]
-            min_x_clamped = np.clip(min_x_rot, 0, width - 1)
-            max_x_clamped = np.clip(max_x_rot, 0, width - 1)
-            # 裁剪y坐标到[0, height-1]
-            min_y_clamped = np.clip(min_y_rot, 0, height - 1)
-            max_y_clamped = np.clip(max_y_rot, 0, height - 1)
-            
-            # 计算裁剪后的有效宽高，过滤无效框
-             # 5. 计算有效框面积及占比，过滤小占比框（核心优化）
-            valid_width = max_x_clamped - min_x_clamped
-            valid_height = max_y_clamped - min_y_clamped
-            valid_area = valid_width * valid_height
-            area_ratio = valid_area / original_area  # 有效面积占比
+        # 4. 计算面积占比
+        area_ratio = valid_area / original_area
+       
 
-            MIN_AREA_RATIO = 0.1  # 最小有效面积占比阈值
-            # 若有效面积为0 或 占比＜1/5，丢弃该框
-            flag = area_ratio < MIN_AREA_RATIO
-            if valid_area <= 0 or flag:
-                # print(f"丢弃小占比框：有效占比={area_ratio:.3f}<{MIN_AREA_RATIO})")
-                continue
-            
-            # 4. 绘制带颜色的矩形框（使用裁剪后的坐标）
-            box_color = class_color_map.get(cube['label'], (128, 128, 128))  # 类别颜色
-            class_name = cube['label']
+        max_area = height*width
+        valid_ratio = valid_area / max_area # 有效面积占整张图像比
+         # 过滤条件：有效面积为0 或 占比不足且 绝对面积太小
+        if valid_area <= 0 or (area_ratio < 0.2 and valid_ratio <= 0.4):
+            continue
+        
+        # 4. 绘制带颜色的矩形框（使用裁剪后的坐标）
+        box_color = class_color_map.get(cube['label'], (128, 128, 128))  # 类别颜色
+        class_name = cube['label']
 
-            pt1 = (int(min_x_clamped), int(min_y_clamped))  # 裁剪后左上角
-            pt2 = (int(max_x_clamped), int(max_y_clamped))  # 裁剪后右下角
-            cv2.rectangle(img, pt1, pt2, box_color, 2)  # 仅绘制图像内的部分
-            
-            # 5. 绘制类别名称（适配裁剪后的位置）
-            # 文本位置：裁剪后框的左上角上方（避免超出图像）
-            if pt1[1] - 10 > 0:  # 上方有空间
-                text_pos = (pt1[0], pt1[1] - 10)
-            else:  # 上方无空间，放框内
-                text_pos = (pt1[0], pt1[1] + 20)
-            
-            # 白色文本+黑色描边，确保清晰
-            cv2.putText(img, class_name, text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)  # 描边
-            cv2.putText(img, class_name, text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)  # 文本
-            
-            # # 6. 生成裁剪后的YOLO标签（基于有效区域）
-            # # 计算裁剪后框的中心坐标（像素级）
-            # x_center_pixel = min_x_clamped + valid_width / 2.0
-            # y_center_pixel = min_y_clamped + valid_height / 2.0
-            
-            # # 归一化（确保在[0,1]范围内）
-            # x_center = x_center_pixel / width
-            # y_center = y_center_pixel / height
-            # w_norm = valid_width / width
-            # h_norm = valid_height / height
-            
-            # # 再次裁剪归一化值（保险措施）
-            # x_center = np.clip(x_center, 0.0, 1.0)
-            # y_center = np.clip(y_center, 0.0, 1.0)
-            # w_norm = np.clip(w_norm, 0.0, 1.0)
-            # h_norm = np.clip(h_norm, 0.0, 1.0)
-            
-            # 添加到YOLO标签列表
-            yolo_line = f"{cube['label']} {pt1[0]} {pt1[1]} {pt2[0]} {pt2[1]}"
-            yolo_labels.append(yolo_line)
+        pt1 = (int(min_x_clamped), int(min_y_clamped))  # 裁剪后左上角
+        pt2 = (int(max_x_clamped), int(max_y_clamped))  # 裁剪后右下角
+        cv2.rectangle(img, pt1, pt2, box_color, 2)  # 仅绘制图像内的部分
+        
+        # 5. 绘制类别名称（适配裁剪后的位置）
+        # 文本位置：裁剪后框的左上角上方（避免超出图像）
+        if pt1[1] - 10 > 0:  # 上方有空间
+            text_pos = (pt1[0], pt1[1] - 10)
+        else:  # 上方无空间，放框内
+            text_pos = (pt1[0], pt1[1] + 20)
+        
+        # 白色文本+黑色描边，确保清晰
+        cv2.putText(img, class_name, text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)  # 描边
+        cv2.putText(img, class_name, text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)  # 文本
+        
+        # 添加到YOLO标签列表
+        yolo_line = f"{cube['label']} {pt1[0]} {pt1[1]} {pt2[0]} {pt2[1]}"
+        yolo_labels.append(yolo_line)
             
     # print(f"标签文件路径: {save_2dlabel_path}")
     # 写入标签（若没有目标则创建空文件）
@@ -431,58 +485,56 @@ def visualize_projection_on_image(cubes, K, cam2lid,image_path, save_2dlabel_pat
         else:
             f.write('')  # 无目标则为空文件
 
-    # image_name = os.path.basename(image_path)
-    # if image_name in ["00001.png","00100.png"]:
-    #     ## 显示图像（可选）
-    #     cv2.imshow("2D Bounding Boxes", img)
-    #     cv2.waitKey(0)
-    #     cv2.destroyAllWindows()
-
+    # 图像和点云一起可视化
+    image_name = os.path.basename(image_path)
+    if image_name in ["02284.png","02926.png"]:
+        cv2.imshow("2D Bounding Boxes", img)
+        cv2.waitKey(0)
+        o3d.visualization.draw_geometries([frame_pcd]+vis_objects)
+        cv2.destroyAllWindows()
+    
+    if True:
+        print(vis_save_path)
+        cv2.imwrite(vis_save_path, img)
     return img
 
 # 6. 主函数
-def main(label_3d_dir, fixed_image_dir,label_2d_dir):
+def main(label_3d_dir, fixed_image_dir,label_2d_dir,vis_save_dir):
 
-    for file_name in os.listdir(label_3d_dir):
-        # print(file_name)
+    for file_name in sorted(os.listdir(label_3d_dir)):
         txt_path = os.path.join(label_3d_dir, file_name)    
         num_str = file_name.split('.')[0]  # 提取数字部分
         image_name = f"{int(num_str):05d}"  # 转换为整数后格式化，结果："00111"
         image_name = image_name + ".png"
         img_path = os.path.join(fixed_image_dir, image_name)
-        save_2dlabel_path = os.path.join(label_2d_dir, image_name+".txt")
+        pcd_path = os.path.join(label_3d_dir.replace("3D_label","pcd"), file_name.replace(".txt",".pcd"))
+        save_2dlabel_path = os.path.join(label_2d_dir, image_name[:-4]+".txt")
+        vis_save_path = os.path.join(vis_save_dir, image_name)
 
         # 解析数据
+        frame_pcd = o3d.io.read_point_cloud(pcd_path)
         cubes = parse_3d_annotations(txt_path)
         K, _, _,cam2lid = get_camera_intrinsics()
         # print(f"解析到 {len(cubes)} 个3D立方体")
 
-        fig = visualize_projection_on_image(cubes, K, cam2lid, img_path,save_2dlabel_path,is_rotated_180=False)
-        # 为每个相机可视化投影结果
-        if True:       
-            # 可选：保存带投影的图像
-            vis_save_dir =  fixed_image_dir.replace("fixed_images","fixed_images_with_label")
-            os.makedirs(vis_save_dir, exist_ok=True)
-
-            output_path = os.path.join(vis_save_dir,image_name)
-            cv2.imwrite(output_path, fig)
-            print(f"带投影的图像已保存到 {output_path}")
-
-
-
-
+        fig = visualize_projection_on_image(frame_pcd, cubes, K, cam2lid, img_path,save_2dlabel_path,vis_save_path,
+                                             is_rotated_180=True)
+       
 
 if __name__ == "__main__":
 
     # scene_dir = '/mnt/dln/data/datasets/0915/make_label_raw/27-parking-1'  # 场景目录
-    scene_dir = '/mnt/dln/data/datasets/0915/for_bev_test/'  # 场景目录
+    scene_dir = '/mnt/dln/data/datasets/0915/make_label_raw/27-parking-3/'  # 场景目录
     label_3d_dir = scene_dir + '/3D_label'
     fixed_image_dir = scene_dir + '/fixed_images'
     label_2d_dir = scene_dir + '/2D_label'
+    vis_save_dir =  scene_dir + "fixed_images_with_label"
     if not os.path.exists(label_2d_dir):
         os.makedirs(label_2d_dir)
     if len(os.listdir(label_2d_dir)) > 0:
         print(f"警告：2D标签目录 {label_2d_dir} 已存在且非空，可能覆盖已有标签")
-        
+    
+    if not os.path.exists(vis_save_dir):
+        os.makedirs(vis_save_dir)
 
-    main(label_3d_dir, fixed_image_dir,label_2d_dir) 
+    main(label_3d_dir, fixed_image_dir,label_2d_dir,vis_save_dir) 

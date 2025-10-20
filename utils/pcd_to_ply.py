@@ -60,6 +60,7 @@ def batch_convert(folder_path, output_folder=None):
     
     print(f"\n转换完成：共处理 {total_count} 个PCD文件，成功转换 {converted_count} 个")
 
+
 if __name__ == "__main__":
     # 设置命令行参数
     parser = argparse.ArgumentParser(description='批量将PCD格式点云转换为PLY格式')

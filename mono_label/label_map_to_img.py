@@ -295,7 +295,7 @@ def visualize_projection_on_image(cubes, cameras, K, image_folder, image_id=1):
 
 
         ## 绘制标签方式改这里,立方体为True  | 矩形框为False
-        if False:
+        if True:
             # 绘制立方体投影边
             for edge in edges:
                 v1, v2 = edge

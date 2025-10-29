@@ -280,9 +280,10 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
                 # 写入文件
                 f.write(line)
 
-
+        if len(vis_objects) == 0:
+            continue
         # # 可视化结果
-        o3d.visualization.draw_geometries([frame_pcd]+vis_objects,window_name=filename)
+        # o3d.visualization.draw_geometries([frame_pcd]+vis_objects,window_name=filename)
 
 
 
@@ -291,29 +292,25 @@ if __name__=="__main__":
     
 
     # 路径设置
-    json_annotation_path = "/mnt/dln/data/datasets/0915/for_bev_test/bev_label.json"
-    pcd_dir = "/mnt/dln/data/datasets/0915/for_bev_test/pcd/"
-    pose_dir = "/mnt/dln/data/datasets/0915/for_bev_test/pose/"
-    save_label_dir = "/mnt/dln/data/datasets/0915/for_bev_test/3D_label/"
+    json_annotation_path = "/mnt/dln/data/datasets/0915/for_bev_fisheye_test/test2bag_lidar/bev_fisheye_label.json"
+    pcd_dir = "/mnt/dln/data/datasets/0915/for_bev_fisheye_test/test2bag_lidar/pcd/"
+    pose_dir = "/mnt/dln/data/datasets/0915/for_bev_fisheye_test/test2bag_lidar/pose/"
+    save_label_dir = "/mnt/dln/data/datasets/0915/for_bev_fisheye_test/test2bag_lidar/3D_label/"
+    # json_annotation_path = "/mnt/dln/data/datasets/0915/make_label_raw/label/lab_430-47528.json"
+    # pcd_dir = "/mnt/dln/data/datasets/0915/make_label_raw/lab_430//pcd/"
+    # pose_dir = "/mnt/dln/data/datasets/0915/make_label_raw/lab_430//pose/"
+    # save_label_dir = "/mnt/dln/data/datasets/0915/make_label_raw/lab_430//3D_label/"
 
     if not os.path.exists(save_label_dir):
         os.makedirs(save_label_dir)
-    ##########################################################################################
-    # json_annotation_path = "/mnt/dln/projects/perception_fusion/label/test_rgb_points-58943.json"
-    # pcd_dir = "/mnt/dln/433_label_test/pcd/"
-    # pose_dir = "/mnt/dln/433_label_test/save_label/"
-    # save_label_dir = "/mnt/dln/data/datasets/car_lidar_d455_wct_0813/unpacked_data/3D_label"
-
-    
 
     # # # 变换矩阵，# 如果建图的第一帧与点云的第一帧不同，需要对标签进行变换align_transform
-    # align_transform = np.array([
-    #     [9.11217840e-01, 4.11648030e-01, -1.50979617e-02, -3.29478689e+00],
-    #     [-4.11710906e-01, 9.11313743e-01, -1.17996443e-03, 5.10659696e+00],
-    #     [1.32732499e-02, 7.29120011e-03, 9.99885323e-01, -1.17410981e-02],
-    #     [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]
-    # ]) 
-
+    # align_transform = np.array([ # Omni-LIVO
+    #     [-6.52587552e-02,  9.97865852e-01,  2.24431604e-03,  7.67024642e+00],
+    #     [-9.97860431e-01, -6.52490961e-02, -4.13701536e-03, -2.40495577e+01],
+    #     [-3.98174676e-03, -2.50949064e-03,  9.99988924e-01, -1.33133877e-01],
+    #     [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00]])
+    align_transform = None
     
-    main(json_annotation_path,pcd_dir,pose_dir,save_label_dir)
+    main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=align_transform)
     

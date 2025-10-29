@@ -50,6 +50,7 @@ def get_align_transformation(pc1_path, pc2_path):
     # pc2是map
     pcd1 = o3d.io.read_point_cloud(pc1_path)
     pcd2 = o3d.io.read_point_cloud(pc2_path)
+    # pcd2.estimate_normals()
     pcd1.paint_uniform_color([1, 0, 0])
 
     # rotation_matrix = np.array([
@@ -69,13 +70,11 @@ def get_align_transformation(pc1_path, pc2_path):
 
 
     ds_pc2 = pcd2.voxel_down_sample(0.5)
-    # o3d.visualization.draw_geometries([pcd1, ds_pc2])
-    
-
+    o3d.visualization.draw_geometries([pcd1, ds_pc2])
     
     voxel_size = 0.5
     ds_pc1 = pcd1.voxel_down_sample(voxel_size)
-    ds_pc2 = ds_pc2.voxel_down_sample(voxel_size)
+    # ds_pc2 = ds_pc2.voxel_down_sample(voxel_size)
     # o3d.visualization.draw_geometries([ds_pc1, ds_pc2])
 
 
@@ -115,12 +114,13 @@ def get_align_transformation(pc1_path, pc2_path):
 
 
 if __name__=="__main__":
-    pc1_path = "/mnt/dln/data/datasets/0915/make_label_raw/meeting_408/408_1377_ok/PCD/all_raw_points.pcd"
-    # pc2_path = "/mnt/dln/ros2_ws/src/FAST-LIVO2/Log/PCD/all_raw_points.pcd"
-    pc2_path = "/mnt/dln/data/datasets/0915/make_label_raw/meeting_408/meeting_408.pcd"
+
+    pc1_path = "/mnt/dln/data/datasets/0915/for_bev_test/down_raw_points.pcd"  # 新的地图
+    pc2_path = "/mnt/dln/data/datasets/0915/bev_label/velodyne/down_output_for_lable.pcd" # 原始地图
     transformation = get_align_transformation(pc1_path, pc2_path)
 
     print(transformation)
+    print(np.linalg.inv(transformation))
 
     pcd1 = o3d.io.read_point_cloud(pc1_path)
     pcd1 = pcd1.transform(transformation)

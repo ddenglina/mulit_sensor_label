@@ -81,10 +81,10 @@ def euler2rot(euler, order='xyz'):
     return R
 
 
-pcd_file = '/mnt/dln/data/datasets/0915/make_label_raw/27-parking-1/pcd/1.pcd'
+pcd_file = '/mnt/dln/data/datasets/0915/make_label_raw/lab_430/pcd/1.pcd'
 frame_pcd = o3d.io.read_point_cloud(pcd_file)
 
-txt_path = '/mnt/dln/data/datasets/0915/make_label_raw/27-parking-1/3D_label/1.txt'
+txt_path = '/mnt/dln/data/datasets/0915/make_label_raw/lab_430/3D_label/1.txt'
 cubes = parse_3d_annotations(txt_path)
 
 

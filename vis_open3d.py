@@ -7,6 +7,7 @@ def load_pcd_file(file_path):
     """加载PCD格式点云文件"""
     pcd = o3d.io.read_point_cloud(file_path)
     print(f"加载点云文件: {file_path}，包含 {len(pcd.points)} 个点")
+   
     return pcd
 
 def load_labels(file_path):
@@ -15,7 +16,6 @@ def load_labels(file_path):
         data = json.load(f)
     # 按照提供的格式，标签路径为shapes -> shapes
     return data.get('shapes', {})
-    # return data.get('shapes', {}).get('shapes', [])
 
 def translate_boxes_to_open3d_instance(gt_boxes):
     """
@@ -115,34 +115,11 @@ def process_label(label):
 
 def visualize_point_cloud_with_labels(pcd_file, labels_file):
     """可视化点云和标签"""
-    # 加载数据
-    # align_transform = np.array([
-    # [-0.1135988,   0.99345154,  0.01222071, -0.04967225],
-    # [ 0.9934563,   0.11372859, -0.01050686,  0.23528954],
-    # [-0.0118279,   0.01094717, -0.99987012,  0.03008906],
-    # [ 0.,          0.,          0.,          1.        ]
-    # ])
-
-    # align_transform = np.array([
-    #     [-0.98246614,  0.0940865,  -0.16095967,  1.19604319],
-    #     [ 0.12184263,  0.97747356, -0.17233633, -0.58192143],
-    #     [ 0.1411193,  -0.18892635, -0.97179842,  0.25561647],
-    #     [ 0.,          0.,          0.,          1.        ]
-    #     ])
-    
-    # align_transform = np.array(
-    #     [[-0.32122805, -0.94515997,  0.05903535,  0.04526527],
-    #     [-0.9459984,   0.3231326,   0.02592981,  0.06620629],
-    #     [-0.04358407, -0.04751797, -0.99791907, -0.08589521],
-    #     [ 0.,          0.,          0.,          1.        ]]
-    # )
     pcd = load_pcd_file(pcd_file)
-    # pcd.paint_uniform_color([0.5, 0.5, 0.5])
-    # pcd=pcd.transform(align_transform)  # 应用变换矩阵
-
-
     labels = load_labels(labels_file)
     
+
+
     # 准备可视化对象
     vis_objects = [pcd]
     labels_info = []
@@ -172,6 +149,8 @@ def visualize_point_cloud_with_labels(pcd_file, labels_file):
     # opt.background_color = [0.05, 0.05, 0.05]  # 深灰色背景
     opt.point_size = 2
     opt.show_coordinate_frame = True
+    # 加粗线条（关键修改：设置线宽，默认值通常为1，这里设置为5）
+    opt.line_width = 5
     
     # 显示标签信息
     print("\n检测到的标签:")
@@ -197,4 +176,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     visualize_point_cloud_with_labels(args.pcd_file, args.labels_file)
-    

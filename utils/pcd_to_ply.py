@@ -63,16 +63,39 @@ def batch_convert(folder_path, output_folder=None):
 
 if __name__ == "__main__":
     # 设置命令行参数
-    parser = argparse.ArgumentParser(description='批量将PCD格式点云转换为PLY格式')
-    parser.add_argument('input_folder', help='包含PCD文件的文件夹路径')
-    parser.add_argument('-o', '--output_folder', help='输出PLY文件的文件夹路径（可选）')
+    parser = argparse.ArgumentParser(description='将PCD格式点云转换为PLY格式（支持单个文件或目录批量处理）')
+    parser.add_argument('input_path', help='输入路径（可以是PCD文件或包含PCD文件的文件夹）')
+    parser.add_argument('-o', '--output', help='输出路径（可选，若输入为文件则为输出文件路径，若输入为目录则为输出目录路径）')
     
     args = parser.parse_args()
     
-    # 验证输入文件夹是否存在
-    if not os.path.isdir(args.input_folder):
-        print(f"错误：输入路径 {args.input_folder} 不是有效的文件夹")
-    else:
-        # 执行批量转换
-        batch_convert(args.input_folder, args.output_folder)
+    # 处理输入路径
+    input_path = args.input_path
     
+    # 检查输入路径是否存在
+    if not os.path.exists(input_path):
+        print(f"错误：输入路径 {input_path} 不存在")
+    else:
+        # 处理单个文件
+        if os.path.isfile(input_path):
+            # 检查是否为PCD文件
+            if not input_path.lower().endswith('.pcd'):
+                print(f"错误：{input_path} 不是PCD文件")
+            else:
+                # 处理输出路径
+                if args.output:
+                    output_path = args.output
+                    # 确保输出目录存在
+                    output_dir = os.path.dirname(output_path)
+                    if output_dir and not os.path.exists(output_dir):
+                        os.makedirs(output_dir, exist_ok=True)
+                else:
+                    # 默认为原文件同目录下的PLY文件
+                    output_path = os.path.splitext(input_path)[0] + '.ply'
+                
+                # 执行单个文件转换
+                convert_pcd_to_ply(input_path, output_path)
+        
+        # 处理目录（批量转换）
+        elif os.path.isdir(input_path):
+            batch_convert(input_path, args.output)

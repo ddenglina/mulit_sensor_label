@@ -20,8 +20,17 @@ class_color_map = {
     "chair": (0, 255, 0),    # 类别1：绿色（如pedestrian）
     "table": (255, 0, 0),    # 类别2：蓝色（如cyclist）
     "robot": (0, 255, 255),  # 类别3：黄色（如truck）
+    "robot_arm": (255, 0, 128),  # 类别4：紫色（如bus）
     "trash_can": (255, 0, 255), # 类别4：紫色（如bus）
-    "screen": (255, 255, 0) # 类别5：黄色（如screen）
+    "screen": (255, 255, 0), # 类别5：黄色（如screen）
+    "cabinet":(128, 128, 0),    # 类别6：\(如cabinet）
+    "sitting_people": (0, 128, 0),    # 类别7：绿色（如sitting_people）
+    "potted_plant": (128, 0, 0),    # 类别8：棕色（如potted_plant）
+    "computer": (0, 0, 128),    # 类别9：蓝色（如computer）
+    "storage_rack": (128, 128, 128),    # 类别10：灰色（如storage_rack）
+    "plastic_stool": (255, 128, 0),    # 类别11：橙色（如plastic_stool）
+    "fan": (50, 128, 0),
+    "white_board": (50, 50, 50),    # 类别12：白色（如white_board）
     # 可根据实际类别扩展...
 }
 
@@ -29,14 +38,59 @@ class_color_map = {
 min_points_list = {
     "car": 130,    # 类别0：红色（如car）
     "chair": 35,    # 类别1：绿色（如pedestrian）
-    "table": 35,    # 类别2：蓝色（如cyclist）
+    "table": 50,    # 类别2：蓝色（如cyclist）
     "robot": 35,  # 类别3：黄色（如truck）
+    "robot_arm": 50,  # 类别3：黄色（如truck）
     "trash_can": 35, # 类别4：紫色（如bus）
-    "screen": 35 # 类别5：黄色（如screen）
+    "screen": 35, # 类别5：黄色（如screen）
+    "cabinet": 35,    # 类别6：\(如cabinet）
+    "sitting_people": 50,    # 类别7：绿色（如sitting_people）
+    "potted_plant": 35,    # 类别8：棕色（如potted_plant）
+    "computer": 35,    # 类别9：蓝色（如computer）
+    "storage_rack": 50,    # 类别10：灰色（如storage_rack）
+    "plastic_stool": 35,    # 类别11：橙色（如plastic_stool）
+    "fan": 50,
+    "white_board": 35,    # 类别12：白色（如white_board）
     # 可根据实际类别扩展...
 }
 
+# 有效面积占整张图像比，小物體小佔比
+valid_ratio_list = {
+    "car": 0.4,    # 类别0：红色（如car）
+    "chair": 0.3,    # 类别1：绿色（如pedestrian）
+    "table": 0.5,    # 类别2：蓝色（如cyclist）
+    "robot": 0.1,  # 类别3：黄色（如truck）
+    "robot_arm": 0.4,  # 类别4：紫色（如bus）
+    "trash_can": 0.1, # 类别4：紫色（如bus）
+    "screen": 0.1, # 类别5：黄色（如screen）
+    "cabinet": 0.1,    # 类别6：\(如cabinet）
+    "sitting_people": 0.2,    # 类别7：绿色（如sitting_people）
+    "potted_plant": 0.1,    # 类别8：棕色（如potted_plant）
+    "computer": 0.1,    # 类别9：蓝色（如computer）
+    "storage_rack": 0.2,    # 类别10：灰色（如storage_rack）
+    "plastic_stool":0.1,
+    "fan": 0.1,
+    "white_board": 0.3,    # 类别12：白色（如white_board）
+}
 
+# 截斷有效面積占比,小物體大佔比
+trunc_area_ratio_list = {
+    "car": 0.2,    # 类别0：红色（如car）
+    "chair": 0.5,    # 类别1：绿色（如pedestrian）
+    "table": 0.3,    # 类别2：蓝色（如cyclist）
+    "robot": 0.4,  # 类别3：黄色（如truck）
+    "robot_arm": 0.2,  # 类别4：紫色（如bus）
+    "trash_can": 0.4, # 类别4：紫色（如bus）
+    "screen": 0.5, # 类别5：黄色（如screen）
+    "cabinet": 0.5,    # 类别6：\(如cabinet）
+    "sitting_people": 0.4,    # 类别7：绿色（如sitting_people）
+    "potted_plant": 0.4,    # 类别8：棕色（如potted_plant）
+    "computer": 0.4,    # 类别9：蓝色（如computer）
+    "storage_rack": 0.4,    # 类别10：灰色（如storage_rack）
+    "plastic_stool":0.4,
+    "fan": 0.4,
+    "white_board": 0.5,    # 类别12：白色（如white_board）
+}
 
 def get_common_view_points(points, K, R_lidar2cam, T_lidar2cam, img_width, img_height):
     """提取共视区点云及投影坐标"""
@@ -93,13 +147,6 @@ def parse_3d_annotations(txt_path):
 # 3. 定义相机内参 (手动设置)
 def get_camera_intrinsics():
     """手动设置相机内参"""
-    # 示例内参，实际应用中需要根据相机校准数据修改
-    # fx = 644.695000  # 焦距x
-    # fy = 644.734000  # 焦距y
-    # cx = 645.353000   # 主点x坐标
-    # cy = 368.456000   # 主点y坐标
-    # width = 1280 # 图像宽度
-    # height = 720 # 图像高度
 
     # geoscan d435i
     cam_fx = 605.231000
@@ -116,21 +163,15 @@ def get_camera_intrinsics():
         [0, 0, 0, 1]
         ], dtype=np.float64)
 
-    # 环视d435i
-    # fx = 605.231000
-    # fy = 605.133900  # 焦距y
-    # cx = 320.931700   # 主点x坐标
-    # cy = 253.091400   # 主点y坐标
-    # width = 640 # 图像宽度
-    # height = 480 # 图像高度
+
 
     # width = 512
     # height = 384
-    #0
-    # fx = 491.61243079/2
-    # fy = 491.59793421/2
-    # cx = 509.19576525/2
-    # cy = 390.55245804/2
+    # #0
+    # cam_fx = 491.61243079/2
+    # cam_fy = 491.59793421/2
+    # cam_cx = 509.19576525/2
+    # cam_cy = 390.55245804/2
     # camera_to_lidar = np.array([
     #     [-0.720207,  -0.693753,   0.002868,  0.090756],
     #     [-0.012521,   0.008864,  -0.999882, -0.006529],
@@ -167,7 +208,6 @@ def get_camera_intrinsics():
     # cam_fy = 491.75080876/2
     # cam_cx = 531.39937227/2
     # cam_cy = 394.35920146/2
-    
     # camera_to_lidar = np.array([
     #     [  0.726027,   0.687592,  -0.010122, 0.079652],
     #     [ 0.001577,  -0.016384,  -0.999865, 0.014322],
@@ -326,7 +366,7 @@ def create_bounding_box(center, dimensions, rotation):
         center=np.array(center),
         extent=np.array(dimensions),
         R=euler2rot(rotation),
-
+ 
     )
     
     return bbox
@@ -356,8 +396,11 @@ def visualize_projection_on_image(frame_pcd, cubes, K, cam2lid,image_path, save_
     # 存储当前图像的所有YOLO标签
     yolo_labels = []
     vis_objects = []
+
+
     # 处理每个立方体
     for cube in cubes:
+        # print("cube:",cube)
         # 计算立方体顶点
         vertices = get_cube_vertices(
             cube['center'], 
@@ -371,7 +414,7 @@ def visualize_projection_on_image(frame_pcd, cubes, K, cam2lid,image_path, save_
         points_cam = R @ vertices.T + np.array(t).reshape(3, 1)
         visible = points_cam[2, :] > 0
         if not np.any(visible):
-            print("continue")
+            # print("continue")
             continue  # 完全不可见的立方体不处理
         
         # ## 增加框中是否有点云判断 #########################################################
@@ -451,7 +494,7 @@ def visualize_projection_on_image(frame_pcd, cubes, K, cam2lid,image_path, save_
         max_area = height*width
         valid_ratio = valid_area / max_area # 有效面积占整张图像比
          # 过滤条件：有效面积为0 或 占比不足且 绝对面积太小
-        if valid_area <= 0 or (area_ratio < 0.2 and valid_ratio <= 0.4):
+        if valid_area <= 0 or (area_ratio < trunc_area_ratio_list[cube['label']] and valid_ratio <= valid_ratio_list[cube['label']]):
             continue
         
         # 4. 绘制带颜色的矩形框（使用裁剪后的坐标）
@@ -461,7 +504,8 @@ def visualize_projection_on_image(frame_pcd, cubes, K, cam2lid,image_path, save_
         pt1 = (int(min_x_clamped), int(min_y_clamped))  # 裁剪后左上角
         pt2 = (int(max_x_clamped), int(max_y_clamped))  # 裁剪后右下角
         cv2.rectangle(img, pt1, pt2, box_color, 2)  # 仅绘制图像内的部分
-        
+
+
         # 5. 绘制类别名称（适配裁剪后的位置）
         # 文本位置：裁剪后框的左上角上方（避免超出图像）
         if pt1[1] - 10 > 0:  # 上方有空间
@@ -519,12 +563,15 @@ def main(label_3d_dir, fixed_image_dir,label_2d_dir,vis_save_dir):
 
         fig = visualize_projection_on_image(frame_pcd, cubes, K, cam2lid, img_path,save_2dlabel_path,vis_save_path,
                                              is_rotated_180=True)
+        print(11111)
+
        
 
 if __name__ == "__main__":
 
-    # scene_dir = '/mnt/dln/data/datasets/0915/make_label_raw/27-parking-1'  # 场景目录
-    scene_dir = '/mnt/dln/data/datasets/0915/make_label_raw/27-parking-3/'  # 场景目录
+    # scene_dir = '/mnt/dln/data/datasets/0915/make_label_raw/lab_429/'  # 场景目录
+    scene_dir = "/mnt/dln/data/datasets/0915/for_bev_test/"
+    # scene_dir = '/mnt/dln/data/datasets/0915/for_bev_lidar_test/'  # 场景目录
     label_3d_dir = scene_dir + '/3D_label'
     fixed_image_dir = scene_dir + '/fixed_images'
     label_2d_dir = scene_dir + '/2D_label'
@@ -538,3 +585,5 @@ if __name__ == "__main__":
         os.makedirs(vis_save_dir)
 
     main(label_3d_dir, fixed_image_dir,label_2d_dir,vis_save_dir) 
+
+    

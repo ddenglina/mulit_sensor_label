@@ -180,7 +180,7 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
     cubes = parse_3d_annotations(json_annotation_path)
 
     files = os.listdir(pose_dir)
-    files = sorted(files)
+    # files = sorted(files)
     for filename in files:
 
         save_label_path = os.path.join(save_label_dir,filename)
@@ -193,16 +193,9 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
         # print(type(frame_pcd))
         frame_pcd.paint_uniform_color([0.5, 0.5, 0.5])
          
-        # uniform_color = [0.5, 0.5, 0.5]  # 青绿色
-        # frame_pcd.colors = o3d.utility.Vector3dVector(
-        #     np.tile(uniform_color, (len(frame_pcd.points), 1))  # 复制颜色到所有点
-        # )
+
         # 读取位姿
         pose = get_pose(pose_path)
-        # o3d.visualization.draw_geometries([frame_pcd])
-        # frame_pcd = frame_pcd.transform(np.linalg.inv(pose["extrinsics_matrix"]))
-        # frame_pcd = frame_pcd.transform(align_transform)
-        
         vis_objects = []
 
 
@@ -244,22 +237,18 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
                 num_in_box = np.sum(in_bbox)
                 
                 # 如果点数 >= min_points，则保留该框
-                # min_points = 32
-                # print(num_in_box)
                 if num_in_box < min_points:
                     continue
 
                 ##可视化###########################################################################################
                 # 为边界框分配随机颜色
-                # color = np.random.rand(3)
-                color = hex_to_rgb(cube["color"])
-                bbox.color = [c/255 for c in color]
-                
-                axis_length = max(cube["dimensions"]) * 0.8
-                axes = create_bbox_axes(bbox, axis_length,bbox.color)
-
-                vis_objects.append(bbox)
-                vis_objects.append(axes)
+                if False:
+                    color = hex_to_rgb(cube["color"])
+                    bbox.color = [c/255 for c in color]
+                    axis_length = max(cube["dimensions"]) * 0.8
+                    axes = create_bbox_axes(bbox, axis_length,bbox.color)
+                    vis_objects.append(bbox)
+                    vis_objects.append(axes)
 
 
                 ##保存标签#########################################################################################
@@ -280,24 +269,26 @@ def main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,align_transform=No
                 # 写入文件
                 f.write(line)
 
-        if filename in ["1.txt","100.txt"]:
-            # 可视化结果
-            o3d.visualization.draw_geometries([frame_pcd]+vis_objects,window_name=filename)
+        # if filename in ["1.txt","100.txt"]:
+        #     # 可视化结果
+        #     o3d.visualization.draw_geometries([frame_pcd]+vis_objects,window_name=filename)
 
 
 
 
 if __name__=="__main__":
     
-    ai_label_dir = "/mnt/dln/data/datasets/0915/make_label_raw/label/"
-    raw_data_dir = "/mnt/dln/data/datasets/0915/make_label_raw/"
+    # ai_label_dir = "/mnt/dln/data/datasets/0915/make_label_raw/label/"
+    # raw_data_dir = "/mnt/dln/data/datasets/0915/make_label_raw/"
+    ai_label_dir = "/mnt/dln/data/datasets/0915/for_bev_lidar_test/label/"
+    raw_data_dir = "/mnt/dln/data/datasets/0915/"
     json_annotation_list = os.listdir(ai_label_dir)
-
 
 
     for json_annotation in json_annotation_list:
         json_annotation_path = os.path.join(ai_label_dir,json_annotation)
-        scene_name = json_annotation[:-11]
+        # scene_name = json_annotation[:-11]
+        scene_name = json_annotation[:-5]
         pcd_dir = os.path.join(raw_data_dir,scene_name,"pcd/")
         pose_dir = os.path.join(raw_data_dir,scene_name,"pose/")
         save_label_dir = os.path.join(raw_data_dir,scene_name,"3D_label/")
@@ -314,8 +305,15 @@ if __name__=="__main__":
         #     [ 0.        ,  0.        ,  0.        ,  1.        ]]
         # ) 
 
+        # align_transform = np.array([
+        # [ 0.65433284,  0.75163899, -0.08299007,  0.10764468],
+        # [-0.75597532,  0.65289601, -0.04720301, -0.34554929],
+        # [ 0.01870426,  0.09362492,  0.99543183, -0.1275272 ],
+        # [ 0. ,         0. ,         0.  ,        1.        ]])
+        align_transform = None
+        
         # 3D框：默认设置min_points=35
         # for 2D框: 默认设置min_points=60
-        
-        main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,min_points=35)
+               
+        main(json_annotation_path,pcd_dir,pose_dir,save_label_dir,min_points=35,align_transform=align_transform)
     

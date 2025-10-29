@@ -254,6 +254,15 @@ def visualize_projection_on_image(cubes, cameras, K, image_folder, image_id=1,is
     R = quaternion_to_rotation_matrix(camera['quaternion'])
     t = camera['translation']
     
+    fig,ax = plt.subplots(figsize=(10, 8))
+    ax.imshow(img)
+    ax.set_xlim(0,width)
+    ax.set_ylim(height,0)
+    ax.set_aspect('equal')
+    ax.set_title(f"3D to 2D {image_name}")
+    ax.axis("off")
+
+    
     # 立方体的边连接关系
     edges = [
         [0, 1], [1, 3], [3, 2], [2, 0],  # 前面和后面
@@ -290,7 +299,7 @@ def visualize_projection_on_image(cubes, cameras, K, image_folder, image_id=1,is
 
 
         ## 绘制标签方式改这里,立方体为True  | 矩形框为False
-        if False:
+        if True:
             # 绘制立方体投影边
             for edge in edges:
                 v1, v2 = edge
@@ -395,6 +404,7 @@ def visualize_projection_on_image(cubes, cameras, K, image_folder, image_id=1,is
             yolo_line = f"{cube['label']} {x_center:.6f} {y_center:.6f} {w_norm:.6f} {h_norm:.6f}"
             yolo_labels.append(yolo_line)
             
+    plt.show()
 
     label_dir = image_folder.replace("fixed_images","2D_label")  # 标签文件夹路径
     if not os.path.exists(label_dir):
